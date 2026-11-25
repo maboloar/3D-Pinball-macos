@@ -1,0 +1,24 @@
+# build output and packaged apps (the packaged app/dmg bundle the game's copyrighted data: never commit them)
+build/
+dist/
+*.app
+*.dmg
+# the game files themselves are never part of this repo
+Pinball/
+*.DAT
+*.dat
+*.WAV
+*.wav
+*.MID
+*.mid
+*.exe
+*.icns
+# research byproducts (decompiler output of the original program must not be published)
+research/decomp/
+research/out/
+research/tools/dat_names.json
+research/tools/rules_table.json
+# misc
+.DS_Store
+__pycache__/
+*.log
