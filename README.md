@@ -15,7 +15,7 @@
 > **This repository does not contain the game.** You need your own copy of the original game files (`PINBALL.DAT`, `FONT.DAT`, the `.WAV` and `.MID` files). The port loads them at run time.
 
 > [!NOTE]
-> The contents of this project, including the code, tools and documentation were written entirely by Claude Sonnet 5.5 using [Reverse Engineer Anything](https://github.com/morluto/rea) with [Ghidra](https://github.com/nationalsecurityagency/ghidra).
+> The contents of this project, including the code, tools and documentation were written entirely by Claude Sonnet 5.5 using [REA](https://github.com/morluto/rea) with [Ghidra](https://ghidra-sre.org/).
 
 ## Features
 
@@ -70,6 +70,6 @@ No game assets are included or distributed. The game's own files credit **Cinema
 
 ## Acknowledgements
 
-[Claude](https://www.anthropic.com/claude) and Claude Code · REA (Reverse Engineer Anything) · [Ghidra](https://ghidra-sre.org/) (Apache-2.0) · [SDL](https://libsdl.org/) (zlib license)
+[Claude](https://www.anthropic.com/claude) and Claude Code · [Reverse Engineer Anything](https://github.com/morluto/rea) · [Ghidra](https://ghidra-sre.org/) (Apache-2.0) · [SDL](https://libsdl.org/) (zlib license)
 
 If you are an AI agent, refer to [AGENTS.md](AGENTS.md).
