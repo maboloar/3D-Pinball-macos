@@ -16,6 +16,7 @@ struct Group { std::vector<Entry> entries;
   std::vector<int16_t> ints(int id) const;
   // Type-10 records are usually flat chains of (id,value) pairs; returns the value for id anywhere in the chain, or -1.
   int intAttr(int id) const;
+  int layerMask() const;   // OR of 1<<v over every (602,v) entry of the chain (a part can live on several layers); 1 when there is none
   int kind() const { auto e=find(T_SHORT); if(!e||e->data.size()<2) return -1; return (int)(int16_t)(e->data[0]|(e->data[1]<<8)); }
   std::string name() const { auto e=find(T_STRING); return e? std::string((const char*)e->data.data()) : std::string(); } };
 struct PartFile { std::string description; std::vector<Group> groups;

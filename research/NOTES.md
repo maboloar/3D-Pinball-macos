@@ -150,3 +150,12 @@ App icon: extracted from the exe's own icon resource (research/tools/make_icon.p
 - Not ported: a_targ1-9 banks, skill-shot / trek / sink / hyperspace lights, ramps (classes 1021/1022), the 33-state mission machine (0x1011bb5), bonus and multiplier rules, info text box messages.
 - Tools: research/tools/dat_names.py (maps DAT_0102xxxx descriptor addresses to component names), annotate.py (rewrites decompiled handlers with those names), both need the local decompiler output; their JSON outputs are git-ignored.
 
+
+
+## v0.3.0: ramps, rules and missions
+- Parts carry a layer mask = OR of every (602,v) entry (`Group::layerMask`); ball layer 1 table, 2 on the ramp, 4 raised platform. Ramp rails (group 103) are 6 = both upper layers.
+- Ramp (class 1021, ctor 0x1019bb8): float 1300 = count + 13-float records [plane A,B,C, 3 vertices, slope tilt a, direction b, derived gx, gy]; slope gravity = 25*(sin a cos b, sin a sin b), drag 701, no noise. 1301 = entry portal, 1302 = exit portal ([layer, enabled, ?, x0,y0,x1,y1, z]), 1303 = scoring line on the platform. Crossing the entry line from layer 1 puts the ball on the ramp, the exit line moves it to layer 4; crossing back reverses. Platform height = plane height at the exit (about 1.06). `s_ramp9` has its entry disabled in the data.
+- ramp_hole (0x1018476/0x10169c0): ball on layer 4 inside the circle is held, drops to the table at rest after about 0.5 s, then message 0x3a (lamp lite54 blinks).
+- Rules: every scoring component hit calls `Rules::hit`; handlers in `rules_game.cpp` mirror 0x100c44b..0x100e0ed, 0x101240d, 0x1012570, 0x1011f1a, 0x10126ba; the mission machine mirrors 0x1011bb5 and its 33 state handlers (state = mission id 2..18, sub-states 0x14-0x1f, 0x20 game over). Mission choice: rank (middle_circle lit count) x ramp-bank target hit picks the mission; the ramp accepts it.
+- Tables: field multipliers 1,2,3,5,10 (0x1024758); mission accept award 10000 (ids 2-5), 20000 (6-14), 30000 (15-18).
+- Text ids come from the exe's string table; this project writes its own wording.

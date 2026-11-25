@@ -18,6 +18,10 @@ int Group::intAttr(int id) const {
     if(v[0]==1025) continue;                      // table_objects list, not a chain
     for(size_t i=0;i+1<n;){ int a=v[i]; if(a==id) return v[i+1]; i+= (a==1500)? 9 : 2; } }
   return -1; }
+int Group::layerMask() const {
+  int m=0; for(auto& e: entries) if(e.type==T_INTS && e.data.size()>=4){ const int16_t* v=(const int16_t*)e.data.data(); size_t n=e.data.size()/2; if(v[0]==1025) continue;
+    for(size_t i=0;i+1<n;){ int a=v[i]; if(a==602 && v[i+1]>=0 && v[i+1]<8) m|=1<<v[i+1]; i+= (a==1500)? 9 : 2; } }
+  return m? m : 1; }
 bool PartFile::load(const std::string& path, std::string* err){
   auto fail=[&](const char* m){ if(err) *err=m; return false; };
   FILE* f=fopen(path.c_str(),"rb"); if(!f) return fail("cannot open file");

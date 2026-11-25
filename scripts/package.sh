@@ -12,7 +12,7 @@
 # Needs: Xcode command line tools, CMake, Homebrew sdl2-compat + sdl3. Nothing is downloaded; temp files stay under build/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION="0.2.0"; BREW=/opt/homebrew
+VERSION="0.3.0"; BREW=/opt/homebrew
 MODE="personal"; GAME=""
 if [ "${1:-}" = "--release" ]; then MODE="release"; else GAME="${1:-../Pinball}"; fi
 

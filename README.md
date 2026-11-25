@@ -25,7 +25,9 @@
 - Lamp engine and part of the table rules: top lanes and bumper upgrades, flipper lane rotation, target banks
 - Nudging and tilt, scoring, WAV effects, MIDI music, full screen, auto-pause, a short how-to-play alert
 
-**Not yet implemented:** ramps, the mission and bonus rules, and some of the remaining lamp rules.
+**Implemented:** the left ramp and the raised platform with its ramp hole, all 17 missions and the final maelstrom chain, ranks and fuel, field multipliers, bonus, jackpot lamps, extra balls and ball save, the skill shot, the hyperspace chute sequence, text messages, tilt warning and a top-five high-score table (F5 shows it; you type a name after a qualifying game).
+
+**Approximations:** the right-hand thin ramp (`s_ramp9`) cannot be entered, multiball (ball locks) is replaced by an extra ball, drop targets are not animated, and light chase animations are simplified. The game has been verified with automated tests only, not by a person playing it.
 
 ## Install
 

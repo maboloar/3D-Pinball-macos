@@ -44,6 +44,31 @@ static void drawGeometry(SDL_Renderer* r,const PartFile& dat,const Camera& cam){
     else if(n>1 && f.size()>=(size_t)(1+2*n)){ if(id==600) SDL_SetRenderDrawColor(r,0,255,0,255); else SDL_SetRenderDrawColor(r,255,255,0,255);
       float px=0,py=0; for(int k=0;k<n;k++){ float sx,sy; P(f[1+2*k],f[2+2*k],sx,sy); if(k) SDL_RenderDrawLineF(r,px,py,sx,sy); px=sx;py=sy; } } } }
 
+
+// ---- tiny built-in 5x7 text renderer for the info panel (the original used system fonts; this one is drawn with plain rectangles) ----
+static const unsigned char kFont5x7[59][5]={   // ASCII 32..90, column bytes, bit 0 = top row
+ {0,0,0,0,0},{0,0,0x5F,0,0},{0,7,0,7,0},{0x14,0x7F,0x14,0x7F,0x14},{0x24,0x2A,0x7F,0x2A,0x12},{0x23,0x13,8,0x64,0x62},{0x36,0x49,0x55,0x22,0x50},{0,5,3,0,0},
+ {0,0x1C,0x22,0x41,0},{0,0x41,0x22,0x1C,0},{0x14,8,0x3E,8,0x14},{8,8,0x3E,8,8},{0,0x50,0x30,0,0},{8,8,8,8,8},{0,0x60,0x60,0,0},{0x20,0x10,8,4,2},
+ {0x3E,0x51,0x49,0x45,0x3E},{0,0x42,0x7F,0x40,0},{0x42,0x61,0x51,0x49,0x46},{0x21,0x41,0x45,0x4B,0x31},{0x18,0x14,0x12,0x7F,0x10},{0x27,0x45,0x45,0x45,0x39},{0x3C,0x4A,0x49,0x49,0x30},{1,0x71,9,5,3},
+ {0x36,0x49,0x49,0x49,0x36},{6,0x49,0x49,0x29,0x1E},{0,0x36,0x36,0,0},{0,0x56,0x36,0,0},{8,0x14,0x22,0x41,0},{0x14,0x14,0x14,0x14,0x14},{0,0x41,0x22,0x14,8},{2,1,0x51,9,6},
+ {0x32,0x49,0x79,0x41,0x3E},{0x7E,0x11,0x11,0x11,0x7E},{0x7F,0x49,0x49,0x49,0x36},{0x3E,0x41,0x41,0x41,0x22},{0x7F,0x41,0x41,0x22,0x1C},{0x7F,0x49,0x49,0x49,0x41},{0x7F,9,9,9,1},{0x3E,0x41,0x49,0x49,0x7A},
+ {0x7F,8,8,8,0x7F},{0,0x41,0x7F,0x41,0},{0x20,0x40,0x41,0x3F,1},{0x7F,8,0x14,0x22,0x41},{0x7F,0x40,0x40,0x40,0x40},{0x7F,2,0x0C,2,0x7F},{0x7F,4,8,0x10,0x7F},{0x3E,0x41,0x41,0x41,0x3E},
+ {0x7F,9,9,9,6},{0x3E,0x41,0x51,0x21,0x5E},{0x7F,9,0x19,0x29,0x46},{0x46,0x49,0x49,0x49,0x31},{1,1,0x7F,1,1},{0x3F,0x40,0x40,0x40,0x3F},{0x1F,0x20,0x40,0x20,0x1F},{0x3F,0x40,0x38,0x40,0x3F},
+ {0x63,0x14,8,0x14,0x63},{7,8,0x70,8,7},{0x61,0x51,0x49,0x45,0x43}};
+static void drawText(SDL_Renderer* r,int x,int y,int w,int h,const std::string& text,Uint8 cr=210,Uint8 cg=235,Uint8 cb=150){
+  SDL_SetRenderDrawColor(r,cr,cg,cb,255); int cx=x, cy=y; const int cw=6, ch=9; auto newline=[&]{ cx=x; cy+=ch; };
+  for(size_t i=0;i<text.size();i++){ unsigned char c=(unsigned char)text[i]; if(c=='\n'){ newline(); continue; } if(c>='a'&&c<='z') c-=32; if(c<32||c>90) c='?';
+    if(cx+cw>x+w){ newline(); } if(cy+ch>y+h+1) return; const unsigned char* g=kFont5x7[c-32];
+    for(int col=0;col<5;col++) for(int row=0;row<7;row++) if(g[col]&(1<<row)){ SDL_Rect p{cx+col,cy+row,1,1}; SDL_RenderFillRect(r,&p); }
+    cx+=cw; } }
+// ---- high scores (top five) kept in the user's application-support folder ----
+static std::string hsPath(const std::string& dir){ return dir+"/highscores.txt"; }
+static void loadHighScores(Rules& rules,const std::string& path){ rules.highScores.clear(); FILE* f=fopen(path.c_str(),"r"); if(!f) return; char name[64]; int sc;
+  while(rules.highScores.size()<5 && fscanf(f,"%63s %d",name,&sc)==2) rules.highScores.push_back({name,sc}); fclose(f); }
+static void saveHighScores(Rules& rules,const std::string& path){ FILE* f=fopen(path.c_str(),"w"); if(!f) return; for(auto& h: rules.highScores) fprintf(f,"%s %d\n",h.name.c_str(),h.score); fclose(f); }
+static bool qualifies(const Rules& rules,int score){ return score>0 && (rules.highScores.size()<5 || score>rules.highScores.back().score); }
+static void addHighScore(Rules& rules,const std::string& name,int score){ rules.highScores.push_back({name.empty()?"PLAYER":name,score}); std::stable_sort(rules.highScores.begin(),rules.highScores.end(),[](const Rules::HS& a,const Rules::HS& b){ return a.score>b.score; }); if(rules.highScores.size()>5) rules.highScores.resize(5); }
+static void tick(Rules& r,float secs){ for(float t=0;t<secs;t+=0.05f) r.update(0.05f); }
 static int selfTest(const PartFile& dat,const std::string& dir){
   World w; if(!w.build(dat)){ fprintf(stderr,"world build failed\n"); return 2; }
   printf("walls=%zu circles=%zu flippers: L(%.2f,%.2f len %.2f) R(%.2f,%.2f)\n",w.segs.size(),w.discs.size(),w.fl[0].px,w.fl[0].py,w.fl[0].len,w.fl[1].px,w.fl[1].py);
@@ -80,21 +105,58 @@ static int selfTest(const PartFile& dat,const std::string& dir){
     // test 11: many quick nudges in one direction must leave neither a picture offset nor a velocity imbalance
     World n; n.build(dat); n.ball={3.f,-1.f,0,0,true}; for(int i=0;i<10;i++) n.step(0.001f); float vx0=n.ball.vx; for(int i=0;i<2;i++){ n.nudge(0); for(int j=0;j<50;j++) n.step(0.001f); } for(int j=0;j<900;j++) n.step(0.001f);
     printf("test11 nudge undo: two quick left nudges -> picture shift (%d,%d) after 1 s (expect 0,0), pending=%zu (expect 0)\n",n.shiftX,n.shiftY,n.pending.size()); }
-  { World w; w.build(dat); Rules r; r.init(dat,w); auto gi=[&](const char* nme){ for(size_t i=0;i<dat.groups.size();i++) if(dat.groups[i].name()==nme) return (int)i; return -1; };
+  { World w; w.build(dat); Rules r; r.init(dat,w); r.newGame();
     int l8=r.light("lite8"), l9=r.light("lite9"), l10=r.light("lite10"); bool ok1=l8>=0&&l9>=0&&l10>=0&&r.group("bmpr_inc_lights")>=0&&r.bumperSets.size()==2;
-    r.rolloverEntered(gi("a_roll3")); bool lane1=r.lights[l8].on&&!r.lights[l9].on;
+    r.hitName("a_roll3"); bool lane1=r.lights[l8].on&&!r.lights[l9].on;
     r.flipperPressed(0); bool rotated=!r.lights[l8].on&&r.lights[l9].on;               // left flipper shifts the lit lane one place
     r.flipperPressed(1); bool back=r.lights[l8].on&&!r.lights[l9].on;
-    r.rolloverEntered(gi("a_roll2")); r.rolloverEntered(gi("a_roll1")); bool flashing=r.lights[l8].flashing&&r.lights[l9].flashing&&r.lights[l10].flashing;
+    r.hitName("a_roll2"); r.hitName("a_roll1"); bool flashing=r.lights[l8].flashing&&r.lights[l9].flashing&&r.lights[l10].flashing;
     int lvl=r.bumperLevel("attack_bumpers"); int st=-1; for(auto& sc: w.scorers) if(sc.name=="a_bump1") st=sc.state;
-    r.update(5.2f); bool allOff=!r.lights[l8].visible()&&!r.lights[l9].visible()&&!r.lights[l10].visible()&&!r.lights[l8].flashing;
-    r.update(60.1f); int lvl2=r.bumperLevel("attack_bumpers");
+    tick(r,5.2f); bool allOff=!r.lights[l8].visible()&&!r.lights[l9].visible()&&!r.lights[l10].visible()&&!r.lights[l8].flashing;
+    tick(r,61.f); int lvl2=r.bumperLevel("attack_bumpers");
     printf("test12 rules: lights/groups found=%d, lane lights on=%d, flipper rotates=%d/%d, all-lit blinks=%d, bumper level %d (expect 1, scoring state %d), lights off after 5 s=%d, level after 60 s=%d (expect 0)\n",ok1,lane1,rotated,back,flashing,lvl,st,allOff,lvl2); }
-  { World w; w.build(dat); Rules r; r.init(dat,w); auto gi=[&](const char* nme){ for(size_t i=0;i<dat.groups.size();i++) if(dat.groups[i].name()==nme) return (int)i; return -1; };
-    r.targetHit(gi("a_targ10")); bool one=r.lights[r.light("lite70")].on; r.targetHit(gi("a_targ11")); r.targetHit(gi("a_targ12"));
-    r.update(2.1f); bool reset=!r.lights[r.light("lite70")].visible()&&!r.lights[r.light("lite71")].visible();
-    r.targetHit(gi("v_rebo1")); bool reb=r.lights[r.light("lite84")].visible(); r.update(0.2f); bool rebOff=!r.lights[r.light("lite84")].visible();
+  { World w; w.build(dat); Rules r; r.init(dat,w); r.newGame();
+    r.hitName("a_targ10"); bool one=r.lights[r.light("lite70")].on; r.hitName("a_targ11"); r.hitName("a_targ12");
+    tick(r,2.1f); bool reset=!r.lights[r.light("lite70")].visible()&&!r.lights[r.light("lite71")].visible();
+    r.hitName("v_rebo1"); bool reb=r.lights[r.light("lite84")].visible(); tick(r,0.2f); bool rebOff=!r.lights[r.light("lite84")].visible();
     printf("test13 target bank: lamp lit=%d, bank blinks and resets=%d, rebound lamp flashes=%d/%d\n",one,reset,reb,rebOff); }
+  { // test 14: ramp ride - a ball shot up the entry portal climbs the ramp, reaches the raised platform and drops through the ramp hole back to the table
+    int bestLvl=0; float bestSp=0; bool dropped=false, scoredTop=false;
+    { World q; q.build(dat); { int c1=0,c2=0,c4=0; for(auto& s: q.segs){ if(s.m.lvl==1)c1++; else if(s.m.lvl==2)c2++; else c4++; } printf(" segs lvl1=%d lvl2=%d lvl4=%d\n",c1,c2,c4); }
+    for(auto& R: q.ramps) printf(" ramp %s tris=%zu entry on=%d interior=%d out=%d (%.2f,%.2f)-(%.2f,%.2f) exit on=%d interior=%d out=%d topZ=%.2f\n",R.name.c_str(),R.tris.size(),R.entry.on,R.entry.interior,R.entry.outLvl,R.entry.x0,R.entry.y0,R.entry.x1,R.entry.y1,R.exit.on,R.exit.interior,R.exit.outLvl,R.topZ); }
+    for(float sp: {25.f,30.f,35.f,40.f,45.f,50.f,55.f,60.f}){ World q; q.build(dat); q.ball={2.4f,3.5f,0.f,-sp,true}; q.ball.vx=0; bool reached=false; int lastLvl=1; int sc0=q.score; bool wasUp=false;
+      for(int i=0;i<12000 && !q.gameOver && q.balls==3;i++){ q.step(0.001f); if(q.ball.lvl==4) wasUp=true; if(q.ball.lvl>bestLvl){ bestLvl=q.ball.lvl; bestSp=sp; } if(wasUp&&q.ball.lvl==1&&lastLvl==4) reached=true; lastLvl=q.ball.lvl; if(getenv("RAMP_TRACE") && (i%250==0 || (getenv("RAMP_FINE") && i<400 && i%8==0))) printf("   sp %.0f t=%.2f ball(%.2f,%.2f) v(%.1f,%.1f) lvl=%d z=%.2f ramp=%d\n",sp,i*0.001,q.ball.x,q.ball.y,q.ball.vx,q.ball.vy,q.ball.lvl,q.ball.z,q.ball.ramp); }
+      if(reached) dropped=true; if(q.score>sc0+4000) scoredTop=true; }
+    printf("test14 ramp: highest layer reached=%d (expect 4) at launch speed %.0f; dropped through ramp hole to table=%d; ramp score seen=%d\n",bestLvl,bestSp,dropped,scoredTop); }
+  { // test 15: mission machine - choose a mission with the ramp bank, accept it on the ramp, finish it, get rewards and a promotion step
+    World w; w.build(dat); Rules r; r.init(dat,w); r.newGame(); bool fuel=r.fuelBars()==6; int rank0=r.rankIndex();
+    r.hitName("s_onewy4"); bool sel=r.missionState==1; r.hitName("a_targ13"); bool picked=r.missionSel==3 && r.lit("lite56");
+    int s0=w.score; r.hitName("ramp"); bool started=r.missionState==3 && r.missionSel==3 && w.score==s0+10000;
+    r.hitName("ramp"); r.hitName("ramp"); bool mid=r.missionState==3 && r.missionSel==1; r.hitName("ramp"); bool done=r.missionState==1 && r.completed==1 && w.score>=s0+10000+500000;
+    int og=r.groupMsg(r.group("outer_circle"),0x25,0);
+    printf("test15 missions: fuel full=%d rank=%d; select state=%d, mission chosen=%d, accepted (+10000)=%d, countdown=%d, completed (+500000)=%d, outer ring steps=%d (expect 6)\n",fuel,rank0,sel,picked,started,mid,done,og); }
+  { // test 16: field multiplier from the top target bank, applied to ordinary scores but not to mission awards
+    World w; w.build(dat); Rules r; r.init(dat,w); r.newGame(); int s0=w.score; r.hitName("a_bump1"); int plain=w.score-s0;
+    r.hitName("a_targ7"); r.hitName("a_targ8"); r.hitName("a_targ9"); bool two=r.mulIdx==1; int s1=w.score; r.hitName("a_bump1"); int dbl=w.score-s1;
+    printf("test16 multiplier: plain bumper %d, after top bank multiplier index %d -> bumper %d (expect %d)\n",plain,r.mulIdx,dbl,plain*2); (void)two; }
+  { // test 17: ball flow - ball save, extra ball, normal loss with end-of-ball bonus, game over
+    World w; w.build(dat); Rules r; r.init(dat,w); r.newGame(); int b0=w.balls; bool saved=r.drained()&&w.balls==b0&&r.lit("lite200");
+    r.hitName("s_onewy1"); tick(r,11.f); bool saveOver=!r.lit("lite200"); if(!saveOver){ auto& L=r.lights[r.light("lite200")]; printf("   lite200 on=%d flashing=%d left=%.2f force=%d offAfter=%d\n",L.on,L.flashing,L.flashLeft,L.force,L.offAfterBlink); } r.hitName("a_roll4"); r.lm_test("lite17",0x13); r.hitName("a_roll4"); bool eb=r.extraBalls==1;
+    bool extra=r.drained()&&r.extraBalls==0&&w.balls==b0; r.hitName("s_onewy1"); tick(r,11.f); int sc0=w.score; bool lost=!r.drained(); bool bonusPaid=w.score>=sc0+25000; r.hitName("s_onewy1"); tick(r,11.f);
+    w.balls=1; bool last=!r.drained()&&r.missionState==0x20;
+    printf("test17 ball flow: ball saved=%d, save window over after 11 s=%d, extra ball earned=%d and used=%d, loss pays bonus=%d/%d, last ball -> game-over state=%d\n",saved,saveOver,eb,extra,lost,bonusPaid,last); }
+  { // test 18: hyperspace chute sequence and centre post, skill shot, fuel burn aborting a mission
+    World w; w.build(dat); Rules r; r.init(dat,w); r.newGame(); bool postDown=!w.postUp; int s0=w.score; r.hitName("a_kout2"); int first=w.score-s0;
+    r.hitName("a_kout2"); r.hitName("a_kout2"); bool post=w.postUp; tick(r,25.f); bool postGone=!w.postUp;
+    World v; v.build(dat); Rules q; q.init(dat,v); q.newGame(); tick(q,0.8f); int k=q.groupMsg(q.group("skill_shot_lights"),0x25,0); int s1=v.score; q.hitName("s_onewy4"); int skill=v.score-s1;
+    q.hitName("s_onewy4"); q.hitName("a_targ14"); q.hitName("ramp"); bool inMission=q.missionState>=2; tick(q,80.f); bool aborted=q.missionState==1 && q.fuelBars()==0;
+    printf("test18 hyperspace/skill/fuel: first chute %d (expect 10000), post up=%d (down at start=%d, drops later=%d), skill shot with %d lit = %d, mission started=%d, aborted when fuel ran out=%d\n",first,post,postDown,postGone,k,skill,inMission,aborted); }
+  { // test 19: every mission state can be entered and leaves no stuck state (smoke run through all 17 missions and the maelstrom chain)
+    int fails=0,done=0; for(int m=2;m<=18;m++){ World w; w.build(dat); Rules r; r.init(dat,w); r.newGame(); r.missionState=1; r.startState_test(m); if(r.missionState!=m){ fails++; continue; }
+      for(int i=0;i<400 && r.missionState!=1;i++){ static const char* seq[]={"a_bump1","a_bump2","a_bump3","a_bump4","a_bump5","a_targ1","a_targ2","a_targ3","a_targ4","a_targ5","a_targ6","a_targ7","a_targ8","a_targ9","a_targ10","a_targ11","a_targ12","a_targ13","a_targ14","a_targ15","a_targ16","a_targ17","a_targ18","a_targ19","a_targ20","a_targ21","a_targ22","ramp","a_kout2","a_kout3","v_sink1","v_sink2","v_sink3","a_roll1","a_roll2","a_roll3","a_roll4","a_roll5","a_roll6","a_roll7","a_roll8","a_roll9","a_roll110","a_roll111","a_roll112","a_flag1","a_flag2","v_rebo1","v_rebo2","v_rebo3","v_rebo4","a_roll184"};
+        if(m==10&&i==0){ r.hitName("a_roll3"); r.hitName("a_roll2"); r.hitName("a_roll1"); } if(m==7&&i==0){ r.hitName("a_roll110"); r.hitName("a_roll111"); r.hitName("a_roll112"); } if(m==15&&i<80) for(int z=0;z<2;z++) r.hitName("a_flag1"); const int NS=(int)(sizeof seq/sizeof seq[0]); r.hitName(seq[(i*7)%NS]); r.hitName(seq[i%NS]); tick(r,1.5f); if(m==5||m==9){ for(int t=1;t<=9;t++) r.hitName("a_targ"+std::to_string(t)); } }
+      if(r.missionState==1 || r.completed>0) done++; else { fails++; printf("   mission %d (%s) stuck in state %d\n",m,Rules::missionName(m),r.missionState); } }
+    printf("test19 mission smoke: %d of 17 missions entered and reached a completion/abort state, failures=%d (expect 0)\n",done,fails); }
   // test 3: ball resting on the left flipper, then flip: it must be thrown up the table
   World f; f.build(dat); f.ball={1.7f,11.7f,0,0,true}; for(int i=0;i<600;i++) f.step(0.001f);
   float restY=f.ball.y; f.inL=true; float minVy=0,minY=99; for(int i=0;i<400;i++){ f.step(0.001f); minVy=std::min(minVy,f.ball.vy); minY=std::min(minY,f.ball.y); }
@@ -103,10 +165,10 @@ static int selfTest(const PartFile& dat,const std::string& dir){
 
 // Simulated player: plunges, flips when the ball is near a flipper, and reports stuck positions / NaN / score. Deterministic per seed.
 static int soak(const PartFile& dat,double seconds,int seed){
-  srand(seed); World w; w.build(dat); double t=0; int games=0, stuckCount=0, plunges=0; float maxSpeed=0; bool bad=false; double lowT=0; std::map<std::string,int> stuckAt; double heldAbs=0; int holds=0;
+  srand(seed); World w; w.build(dat); Rules rr; rr.init(dat,w); rr.newGame(); int missionsDone=0, maxRank=0, sMax=0; double t=0; int games=0, stuckCount=0, plunges=0; float maxSpeed=0; bool bad=false; double lowT=0; std::map<std::string,int> stuckAt; double heldAbs=0; int holds=0;
   double plungeTimer=0; bool pulling=false; int maxScore=0; double hold[2]={0,0}, cool[2]={0,0};
   while(t<seconds){
-    if(w.gameOver){ games++; maxScore=std::max(maxScore,w.score); w.newGame(); }
+    if(w.gameOver){ games++; maxScore=std::max(maxScore,w.score); missionsDone+=rr.completed; w.newGame(); rr.newGame(); }
     if(w.atPlunger()||pulling){ if(!pulling){ pulling=true; w.plungerHeld=true; plungeTimer=0.3+0.7*(rand()%1000)/1000.0; } plungeTimer-=0.001; if(plungeTimer<=0){ w.releasePlunger(); pulling=false; plunges++; } }
     else { for(int i=0;i<2;i++){ const Flipper& F=w.fl[i]; float tx=F.px+cosf(F.restA)*F.len;   // flip when the ball is in front of the flipper (between tip and pivot) and close above it
         float lo=std::min(F.px,tx)-0.3f, hi=std::max(F.px,tx)+0.3f; bool front=w.ball.x>lo && w.ball.x<hi && w.ball.y>F.py-2.2f && w.ball.y<F.py+1.4f;
@@ -117,9 +179,9 @@ static int soak(const PartFile& dat,double seconds,int seed){
       if(sp<0.6f && w.ball.y<w.fl[0].py-0.8f){ lowT+=0.001; if(lowT>4.0){ char key[64]; snprintf(key,sizeof key,"(%.1f,%.1f)",roundf(w.ball.x*2)/2,roundf(w.ball.y*2)/2); stuckAt[key]++; stuckCount++; lowT=0; w.ball.vx=3; w.ball.vy=-3; } } else lowT=0; }
     if(w.ball.held) holds++;
     if(getenv("SOAK_TRACE") && ((long)(t*1000))%(getenv("SOAK_EVERY")?atoi(getenv("SOAK_EVERY")):20000)==0) printf("  t=%.0f ball(%.2f,%.2f) v(%.1f,%.1f) inPlay=%d held=%d score=%d balls=%d\n",t,w.ball.x,w.ball.y,w.ball.vx,w.ball.vy,w.ball.inPlay,w.ball.held,w.score,w.balls);
-    w.step(0.001f); w.events.clear(); t+=0.001; }
-  maxScore=std::max(maxScore,w.score);
-  printf("soak seed %d: %.0fs simulated, %d games, %d plunges, best score %d, max speed %.1f, ball-held steps %d, stuck events %d%s\n",seed,seconds,games,plunges,maxScore,maxSpeed,holds,stuckCount,bad?"  **NaN**":"");
+    w.step(0.001f); rr.update(0.001f); w.events.clear(); maxRank=std::max(maxRank,rr.rankIndex()); sMax=std::max(sMax,rr.missionState==0x20?0:rr.missionState); t+=0.001; }
+  maxScore=std::max(maxScore,w.score); missionsDone+=rr.completed;
+  printf("soak seed %d: %.0fs simulated, %d games, %d plunges, best score %d, max speed %.1f, ball-held steps %d, stuck events %d%s\n   rules: missions completed %d, highest mission state %d, best rank %d\n",seed,seconds,games,plunges,maxScore,maxSpeed,holds,stuckCount,bad?"  **NaN**":"",missionsDone,sMax,maxRank);
   for(size_t i=0;i<w.capCount.size();i++) if(w.capCount[i]>0) printf("   captures: %s x%d\n",w.holes[i].name.c_str(),w.capCount[i]);
   for(auto& s: stuckAt) printf("   stuck near %s x%d\n",s.first.c_str(),s.second);
   return bad?1:0; }
@@ -203,12 +265,19 @@ int main(int argc,char** argv){
       SDL_Surface* s=makeSurface(be->bmp,pal); SDL_SetColorKey(s,SDL_TRUE,SDL_MapRGB(s->format,0,0,0)); ballSprites.push_back({SDL_CreateTextureFromSurface(r,s),be->bmp.w,be->bmp.h,ref[1]}); SDL_FreeSurface(s); } }
   Sprite sprF[2],sprPlunger; { const Bitmap& tb1=tb->find(T_BITMAP)->bmp; sprF[0].load(dat,"a_flip1",r,pal,tb1.x,tb1.y); sprF[1].load(dat,"a_flip2",r,pal,tb1.x,tb1.y); sprPlunger.load(dat,"plunger",r,pal,tb1.x,tb1.y); }
   Scene scene; scene.load(dat,r,pal);
-  Rules rules; rules.init(dat,world); auto newGameAll=[&]{ world.newGame(); rules.newGame(); };
+  bool nameEntry=false, gameOverHandled=false; std::string nameBuf; float hsShowT=0; Rules rules; rules.init(dat,world); auto newGameAll=[&]{ world.newGame(); rules.newGame(); gameOverHandled=false; hsShowT=0; }; rules.newGame(); const std::string hsFile=hsPath(appSupportDir()); if(shotPath.empty()) loadHighScores(rules,hsFile);
   NumBox boxScore,boxBall,boxPlayer; boxScore.load(dat,"score1",r,pal); boxBall.load(dat,"ballcount1",r,pal); boxPlayer.load(dat,"player_number1",r,pal);
   bool paused=false, autoPaused=false, musicWasOn=false, fullscreen=startFull; if(startFull) SDL_SetWindowFullscreen(w,SDL_WINDOW_FULLSCREEN_DESKTOP);
   bool run=true; int frames=0; Uint64 last=SDL_GetPerformanceCounter(); double acc=0;
   if(shotPath.empty() && !noIntro && !getenv("PINBALL_NO_DIALOG") && !introDismissed()){ showHowToPlay(w,true); last=SDL_GetPerformanceCounter(); }   // short how-to-play alert at open
-  while(run){ SDL_Event e; while(SDL_PollEvent(&e)){ if(e.type==SDL_QUIT||(e.type==SDL_KEYDOWN&&e.key.keysym.sym==SDLK_ESCAPE)) run=false;
+  while(run){ SDL_Event e; while(SDL_PollEvent(&e)){ if(e.type==SDL_QUIT) run=false;
+      if(nameEntry){                                                                // typing initials for a new high score
+        if(e.type==SDL_TEXTINPUT){ for(const char* p=e.text.text;*p;p++) if(((*p>='A'&&*p<='Z')||(*p>='a'&&*p<='z')||(*p>='0'&&*p<='9')||*p=='-'||*p=='_') && nameBuf.size()<12) nameBuf+=*p; }
+        if(e.type==SDL_KEYDOWN){ SDL_Keycode k=e.key.keysym.sym; if(k==SDLK_BACKSPACE&&!nameBuf.empty()) nameBuf.pop_back();
+          if(k==SDLK_RETURN||k==SDLK_KP_ENTER||k==SDLK_ESCAPE){ if(k!=SDLK_ESCAPE||true){ std::string nm=nameBuf; for(auto& ch: nm) ch=(char)toupper(ch); addHighScore(rules,nm,world.score); std::string cmd="mkdir -p \""+appSupportDir()+"\""; if(system(cmd.c_str())!=0){} saveHighScores(rules,hsFile); } nameEntry=false; SDL_StopTextInput(); hsShowT=6.f; } }
+        continue; }
+      if(e.type==SDL_KEYDOWN&&e.key.keysym.sym==SDLK_ESCAPE) run=false;
+      if(e.type==SDL_KEYDOWN&&e.key.keysym.sym==SDLK_F5&&!e.key.repeat) hsShowT= hsShowT>0? 0.f : 8.f;
       if(e.type==SDL_KEYDOWN&&e.key.keysym.sym==SDLK_F1) dbg=!dbg;
       if(e.type==SDL_KEYDOWN&&e.key.keysym.sym==SDLK_m&&!e.key.repeat) music.toggle();
       if(e.type==SDL_KEYDOWN&&e.key.keysym.sym==SDLK_h&&!e.key.repeat){ world.releaseInput(); showHowToPlay(w,false); last=SDL_GetPerformanceCounter(); acc=0; }   // H = show the help again
@@ -230,9 +299,9 @@ int main(int argc,char** argv){
           case 1000: case 1010: scene.flash(c,0,0.12f,-1); break;                                      // rubber rebounds flash
           case 1006: case 1019: if(nf>1) scene.flash(c,1,0.2f,0); break;                               // standup targets blink when struck
           default: break; } }
-      for(auto& he: world.hitEvents) rules.targetHit(he.grp);
       world.hitEvents.clear();
-      for(int g: world.triggers) rules.rolloverEntered(g); world.triggers.clear(); rules.update((float)frameDt);
+      world.triggers.clear(); rules.update((float)frameDt); if(hsShowT>0) hsShowT-=(float)frameDt;
+      if(world.gameOver && !gameOverHandled){ gameOverHandled=true; if(shotPath.empty() && qualifies(rules,world.score)){ nameEntry=true; nameBuf.clear(); SDL_StartTextInput(); world.releaseInput(); } else hsShowT=6.f; }
       for(size_t li=0;li<rules.lights.size();li++){ int c=scene.byGroup(rules.lights[li].group); if(c>=0) scene.show(c,rules.lights[li].visible()?0:-1); }   // lights: frame 0 is the lit picture
       for(auto& s: rules.bumperSets) for(auto& bn: s.bumpers){ int c=scene.find(bn); if(c<0) continue; VisComp& v=scene.at(c); int nf=(int)v.frames.size(); v.state=s.level; v.baseFrame=std::min(nf-1,2*s.level); if(v.timer<=0) v.shown=v.baseFrame; }   // bumper level -> frame pair
       scene.update((float)(frameDt)); }
@@ -243,10 +312,17 @@ int main(int argc,char** argv){
     for(int i=0;i<2;i++){ const Flipper& F=world.fl[i]; sprF[i].draw(r,F.A!=0? (F.a-F.restA)/F.A : 0.f,world.shiftX,world.shiftY); }
     sprPlunger.draw(r,world.plungerHeld? std::min(1.f,world.plungerCharge/2.5f):0.f,world.shiftX,world.shiftY);
     boxScore.draw(r,world.score); boxBall.draw(r,world.ballNumber); boxPlayer.draw(r,1);
-    if(!ballSprites.empty() && !world.ball.held){ float sx,sy; cam.project(world.ball.x,world.ball.y,world.radius,sx,sy);          // ball centre is radius above the table
+    { std::string it=rules.info.text, mt=rules.mission.text; if(world.tilted) it="TILT!"; else if(world.warned) it="CAREFUL...";
+      auto hsList=[&]{ std::string s="HIGH SCORES\n"; for(size_t i=0;i<rules.highScores.size();i++) s+=std::to_string(i+1)+". "+rules.highScores[i].name+" "+std::to_string(rules.highScores[i].score)+"\n"; if(rules.highScores.empty()) s+="NONE YET"; return s; };
+      if(nameEntry) mt="NEW HIGH SCORE\nENTER NAME:\n"+nameBuf+"_\nENTER = OK";
+      else if(hsShowT>0) mt=hsList();
+      else if(world.gameOver) mt="GAME OVER\nSPACE OR F2:\nNEW GAME\nF5: HIGH SCORES";
+      else if(paused) mt="GAME PAUSED\nP OR F3 TO RESUME";
+      drawText(r,408,241,160,44,it); drawText(r,408,305,160,88,mt); }
+    if(!ballSprites.empty() && !world.ball.held){ float sx,sy; cam.project(world.ball.x,world.ball.y,world.radius+world.ball.z,sx,sy);          // ball centre is radius above the table
       size_t k=0; float best=1e9f; for(size_t q=0;q<ballSprites.size();q++){ float dd=fabsf(world.ball.y-ballSprites[q].refY); if(dd<best){best=dd;k=q;} }   // sprite for this depth
       const BallSprite& bs=ballSprites[k]; SDL_Rect br{(int)lroundf(sx-bs.w/2.f)+world.shiftX,(int)lroundf(sy-bs.h/2.f)+world.shiftY,bs.w,bs.h}; SDL_RenderCopy(r,bs.t,nullptr,&br);
-      scene.occlude(r,br,cam.depth16(world.ball.x,world.ball.y,world.radius),world.shiftX,world.shiftY); }   // sprites closer to the camera than the ball are drawn over it
+      scene.occlude(r,br,cam.depth16(world.ball.x,world.ball.y,world.radius+world.ball.z),world.shiftX,world.shiftY); }   // sprites closer to the camera than the ball are drawn over it
     if(dbg){ drawGeometry(r,dat,cam); SDL_SetRenderDrawColor(r,0,200,255,255); for(auto& F: world.fl){ float ax,ay,bx,by; cam.project(F.px,F.py,0,ax,ay); cam.project(F.px+cosf(F.a)*F.len,F.py+sinf(F.a)*F.len,0,bx,by); SDL_RenderDrawLineF(r,ax,ay,bx,by); } }
     if(!shotPath.empty() && ++frames==3){ int ww,hh; SDL_GetRendererOutputSize(r,&ww,&hh); SDL_Surface* s=SDL_CreateRGBSurfaceWithFormat(0,ww,hh,32,SDL_PIXELFORMAT_ARGB8888);
       SDL_RenderReadPixels(r,nullptr,SDL_PIXELFORMAT_ARGB8888,s->pixels,s->pitch); SDL_SaveBMP(s,shotPath.c_str()); SDL_FreeSurface(s); run=false; }
